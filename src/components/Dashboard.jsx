@@ -1,5 +1,5 @@
 import '../index.css'; 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../api";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -26,34 +26,6 @@ export default function Dashboard() {
   const [fuelHistory, setFuelHistory] = useState([]);
   const mapRef = useRef(null);
 
-  useEffect(() => {
-    fetchVehicle();
-    const ws = new WebSocket(
-      `ws://localhost:8000/ws/alerts?token=${localStorage.getItem("token")}`
-    );
-    ws.onmessage = (event) => {
-      const alert = JSON.parse(event.data);
-      if (!selectedSensorId || alert.sensor_id === selectedSensorId) {
-        setAlerts((prev) => [alert, ...prev]);
-        fetchLatestSensor(alert.sensor_id);
-      }
-    };
-    return () => ws.close();
-  }, []);
-
-  const fetchVehicle = async () => {
-    try {
-      const res = await API.get("/vehicles/my");
-      const found = res.data.find((v) => v.sensor_id === selectedSensorId);
-      if (found) {
-        setVehicle(found);
-        fetchLatestSensor(found.sensor_id);
-      }
-    } catch (err) {
-      console.error("Error loading vehicle:", err);
-    }
-  };
-
   const fetchLatestSensor = async (sensorId) => {
     try {
       const res = await API.get(`/sensor/latest/${sensorId}`);
@@ -69,6 +41,36 @@ export default function Dashboard() {
       console.warn("No sensor data for", sensorId);
     }
   };
+
+  const fetchVehicle = useCallback(async () => {
+    try {
+      const res = await API.get("/vehicles/my");
+      const found = res.data.find((v) => v.sensor_id === selectedSensorId);
+      if (found) {
+        setVehicle(found);
+        fetchLatestSensor(found.sensor_id);
+      }
+    } catch (err) {
+      console.error("Error loading vehicle:", err);
+    }
+  }, [selectedSensorId]);
+
+  useEffect(() => {
+    fetchVehicle();
+
+    const ws = new WebSocket(
+      `ws://localhost:8000/ws/alerts?token=${localStorage.getItem("token")}`
+    );
+    ws.onmessage = (event) => {
+      const alert = JSON.parse(event.data);
+      if (!selectedSensorId || alert.sensor_id === selectedSensorId) {
+        setAlerts((prev) => [alert, ...prev]);
+        fetchLatestSensor(alert.sensor_id);
+      }
+    };
+
+    return () => ws.close();
+  }, [fetchVehicle, selectedSensorId]);
 
   const defaultPosition = [23.6913, 85.2722];
   const focusedPosition = sensorData
@@ -136,31 +138,31 @@ export default function Dashboard() {
         <div>
           <h2 className="text-2xl font-semibold text-red-400 mb-4">🚨 Live Alerts</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-60 overflow-y-auto">
-  {alerts.map((a, idx) => {
-    const alertType = a.alert.toLowerCase();
-    let icon = "🛠️";
-    let bgStyle = "from-sky-100 to-sky-300 border-sky-200 text-sky-900";
+            {alerts.map((a, idx) => {
+              const alertType = a.alert.toLowerCase();
+              let icon = "🛠️";
+              let bgStyle = "from-sky-100 to-sky-300 border-sky-200 text-sky-900";
 
-    if (alertType.includes("fuel")) {
-      icon = "🔥";
-      bgStyle = "from-rose-100 to-rose-300 border-rose-200 text-rose-900";
-    } else if (alertType.includes("deviation") || alertType.includes("geofence")) {
-      icon = "🚧";
-      bgStyle = "from-green-100 to-green-200 border-yellow-200 text-yellow-700";
-    }
+              if (alertType.includes("fuel")) {
+                icon = "🔥";
+                bgStyle = "from-rose-100 to-rose-300 border-rose-200 text-rose-900";
+              } else if (alertType.includes("deviation") || alertType.includes("geofence")) {
+                icon = "🚧";
+                bgStyle = "from-green-100 to-green-200 border-yellow-200 text-yellow-700";
+              }
 
-    return (
-      <div
-        key={idx}
-        className={`p-4 bg-gradient-to-br ${bgStyle} border rounded-lg shadow-md hover:shadow-lg transition`}
-      >
-        <p className="text-lg font-bold">{icon} {a.alert}</p>
-        <p className="text-sm">Sensor: {a.sensor_id}</p>
-        <p className="text-xs">⏱ {new Date(a.timestamp).toLocaleString()}</p>
-      </div>
-    );
-  })}
-</div>
+              return (
+                <div
+                  key={idx}
+                  className={`p-4 bg-gradient-to-br ${bgStyle} border rounded-lg shadow-md hover:shadow-lg transition`}
+                >
+                  <p className="text-lg font-bold">{icon} {a.alert}</p>
+                  <p className="text-sm">Sensor: {a.sensor_id}</p>
+                  <p className="text-xs">⏱ {new Date(a.timestamp).toLocaleString()}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Fuel Chart */}
