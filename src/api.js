@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "https://fuel-monitor-api.onrender.com",
+  baseURL: "https://fuel-truck-monitoring-backend-1.onrender.com",
 });
 
 API.interceptors.request.use((req) => {
